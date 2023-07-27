@@ -9,7 +9,7 @@ import pandas as pd
 st.title("民航疫情监测系统")
 # st.write("This is a demo of the Epidemic Surveillance System. Notice that the data is not real. the data is shown as below:")
 
-routes = pd.read_csv('flights edited.csv')
+
 
 hide_streamlit_style = """
             <style>
@@ -22,52 +22,54 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 tab1, tab2 = st.tabs(["实时航班","历史航班"])
 
 with tab2:
+    routes = pd.read_csv('flights edited v3.3.3.csv')
     # st.header("A cat")
     col1, col2, col3 = st.columns(3)
 
     with col1:
         # select infectious disease
         choice = st.selectbox("选择传染病：", 
-                              ["Covid confirmed cases_src",
-                                "Monkeypox confirmed cases_src", 
-                              "Covid confirmed cases_dst", 
-                              "Monkeypox confirmed cases_dst"])
-        routes["cases"] = routes[choice]
+                              [ "出发地猴痘确诊病例", 
+                                "出发地新冠确诊病例"])
+        routes["病例"] = routes[choice]
 
     with col2:
         # select destination city
-        city = st.multiselect("选择航班目的地：", routes["city_dst"].unique(),
+        city = st.multiselect("选择航班目的地：", routes["目的地城市"].unique(),
                             default=["Beijing", "Shenzhen","Dalian"])
-        routes = routes[routes["city_dst"].isin(city)]
-
+        routes = routes[routes["目的地城市"].map(lambda x: x in city)]
+        # st.write(routes)
     with col3:
         # select airlines
-        airlines = st.multiselect("选择航班：", routes["airline_name"].unique(), 
-                                  default=["Air China"])
+        airlines = st.multiselect("选择航班：", routes["航空公司名称"].unique(), 
+                                  default=routes["航空公司名称"].unique()[:1])
 
-        routes = routes[routes["airline_name"].isin(airlines)]
-
-
+        routes = routes[routes["航空公司名称"].isin(airlines)]
+    cases_max = routes["病例"].max()
+    cases_min = routes["病例"].min()
+    values = st.slider(
+    '病例数范围',
+    0.0, float(cases_max),
+    (0.1, float(cases_max))
+    )
     
+    routes = routes[routes["病例"].between(values[0], values[1])]
     # st.write("Distribution of cases across the world, and the flights arriving to China")
 
     import json
     # load config
-    with open("config.json", "r") as f:
+    with open("config2.json", "r") as f:
         config = json.loads(f.read())
 
 
     map_1 = KeplerGl(height=600, width=800, config=config)
-    map_1.add_data(data=routes.copy(), name="flights")
+    map_1.add_data(data=routes.copy(), name="航班")
     keplergl_static(map_1)
 
 
     # 
     st.write("航班数: ", len(routes))
     
-
-
-
     # st.dataframe(routes.head())
 
 with tab1:
@@ -119,7 +121,14 @@ with tab1:
             # states['color'] = states['origin_country'].map(lambda country: tuple(int(c * 255) for c in cmap(hash(country))[:3]) + (255,))  # RGBA values with alpha=255
 
             # make the color column random as yello, red, green, make sure most of them are green
-            states["color"] = states["origin_country"].map(lambda country: (0, 255, 0, 255)  if country == "China" else (255, 0, 0, 255))
+            color_map_by_country = {
+                "Guatemala": (0, 255, 0, 255) ,
+                "Slovenia":(255, 128, 0, 255),
+                "Norway": (255, 0, 255, 255),
+                "United States": (255, 0, 0, 255),
+            }
+
+            states["color"] = states["origin_country"].map(lambda country: color_map_by_country.get(country, (255, 255, 255, 255)))
             # random make some of them yellow
             # import numpy as np
             # states["color"] = states["color"].map(lambda color: (255, 255, 0, 255) if np.random.random() > 0.8 else color)
@@ -128,6 +137,7 @@ with tab1:
             from pydeck import Layer, Deck
             from pydeck.data_utils import compute_view
             from pydeck.types import String
+            import pydeck as pdk
 
 
             SCENEGRAPH_URL = "https://raw.githubusercontent.com/visgl/deck.gl-data/master/examples/scenegraph-layer/airplane.glb"
@@ -151,7 +161,7 @@ with tab1:
                 get_orientation= ["roll","yaw" , "pitch"],
                 # set color
                 get_color= "color",
-                size_scale=500,
+                size_scale=550,
                 # _animations={"*": {"speed": 5}},
                 # _lighting=String("pbr"),
             )
@@ -159,7 +169,7 @@ with tab1:
             # Render
             # put china in the center of the map
 
-            view  = {"latitude": 22, "longitude": 114, "zoom": 5, "pitch": 0, "bearing": 0}
+            view  = {"latitude": 31, "longitude": 114, "zoom": 3.5, "pitch": 0, "bearing": 0}
 
             with placeholder.container():
 
@@ -169,17 +179,28 @@ with tab1:
                 beijing_time = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
                 st.write("北京时间：", beijing_time)
 
-                r = Deck(layer, 
-                        #  put China in the center
-                            initial_view_state=view,
+                r = Deck(
+                    
+                     layer,
+         
+                    #  put China in the center
+                    
+                    # api_keys={"mapbox": "pk.eyJ1Ijoid3liZXJ0IiwiYSI6ImNrYjk0bnpkdjBhczAycm84OWczMGFseDcifQ.icmgMlugfJ8erQ-JKmovWQ"},
+                        initial_view_state=view,
+            
+                    # use chinese map style
+                    # map_style="road",
+                    map_provider="mapbox", 
+                    map_style= pdk.map_styles.SATELLITE,
+                    # "mapbox://styles/wybert/ciy3x71yu000l2st2r4t0f6nw",
                         #  initial_view_state=view
                         # show country name and icao24 as tooltip
-                            tooltip= {"text": "航班来自: {origin_country} \n ICAO代码: {icao24}"}
+                    tooltip= {"text": "航班来自: {origin_country} \n ICAO代码: {icao24}"}
                         )
 
                 st.pydeck_chart(r)
 
-            time.sleep(0.5)
+            time.sleep(0.1)
         time.sleep(0.5)
 
     # r.to_html("scenegraph_layer1.html")
