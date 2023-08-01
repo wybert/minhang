@@ -6,7 +6,7 @@ import pandas as pd
 
 # st.title("Epidemic Surveillance System")
 # Translate the text to Chinese
-st.title("民航疫情监测系统")
+st.title("民 航 疫 情 监 测 系 统")
 # st.write("This is a demo of the Epidemic Surveillance System. Notice that the data is not real. the data is shown as below:")
 
 
@@ -76,11 +76,40 @@ with tab1:
     import time
     import requests
     import pandas as pd
+    import pydeck as pdk
     data = pd.read_parquet("data.parquet")
     # st.write(data.head())
     data["datetime"] =  pd.to_datetime(data["unix_time"], unit="s")
+    real_time_cases = pd.read_csv("realtime-cases.csv")
+    
+    real_time_cases['病例'] = real_time_cases['出发地猴痘确诊病例']
+    real_time_cases = real_time_cases[real_time_cases["病例"] > 0]
+    # Use pandas to calculate additional data
+    # real_time_cases["exits_radius"] = real_time_cases["病例"]
+    # scale 病例 to 1-100
+    max = real_time_cases["病例"].max()
+    min = real_time_cases["病例"].min()
+    real_time_cases["exits_radius"] = real_time_cases["病例"].map(lambda x: (x - min) / (max - min) * 100 + 1)
+
+    cases_layer = pdk.Layer(
+        "ScatterplotLayer",
+        real_time_cases,
+        pickable=True,
+        opacity=0.8,
+        stroked=True,
+        filled=True,
+        radius_scale=1500,
+        radius_min_pixels=1,
+        radius_max_pixels=300,
+        line_width_min_pixels=1,
+        get_position=["src_lng", "src_lat"],
+        get_radius="exits_radius",
+        get_fill_color=[255, 0, 0],
+        get_line_color=[0, 0, 0],
+    )
 
     t = data.datetime.drop_duplicates().sort_values()
+
 
     # url = "https://opensky-network.org/api/states/all"
 
@@ -181,7 +210,7 @@ with tab1:
 
                 r = Deck(
                     
-                     layer,
+                     [cases_layer, layer],
          
                     #  put China in the center
                     
